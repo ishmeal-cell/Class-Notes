@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Class Notes</title>
+<style>
+:root{--bg:#f3f6fb;--card:#fff;--ink:#14213d;--mute:#5d6b85;--line:#d5dcea;--accent:#1f4fd8;--hl:#ffe45c;--hlink:#14213d;--red:#c62828;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1424;--card:#171f35;--ink:#eef2fb;--mute:#9aa7c4;--line:#2a3554;--accent:#7ea2ff;--hl:#ffe45c;--hlink:#14213d;--red:#ff8a80;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1424;--card:#171f35;--ink:#eef2fb;--mute:#9aa7c4;--line:#2a3554;--accent:#7ea2ff;--hl:#ffe45c;--hlink:#14213d;--red:#ff8a80;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:20px 16px 40px}
+h1{font:700 26px/1.2 Georgia,"Times New Roman",serif;margin:4px 0 4px}
+p.sub{color:var(--mute);margin:0 0 16px;font-size:15px}
+.bar{display:flex;gap:10px;margin-bottom:14px}
+button{font:inherit;font-weight:600;border:0;border-radius:12px;padding:14px 16px;cursor:pointer;flex:1;background:var(--accent);color:#fff}
+button.alt{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+button.stop{background:var(--red);color:#fff}
+button:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
+.status{display:flex;align-items:center;gap:8px;color:var(--mute);font-size:14px;margin-bottom:10px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--mute)}
+.on .dot{background:var(--red);animation:p 1.2s infinite}
+@keyframes p{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.on .dot{animation:none}}
+.box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px 14px;min-height:220px}
+.ln{padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.ln:last-child{border-bottom:0}
+.ln small{display:block;color:var(--mute);font-size:12px}
+.ln.imp span{background:var(--hl);color:var(--hlink);padding:1px 4px;border-radius:4px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.ln.live{color:var(--mute);font-style:italic}
+.live{color:var(--mute);font-style:italic}
+.para{margin:12px 0}
+.seg{cursor:pointer;border-radius:4px}
+.seg.imp{background:var(--hl);color:var(--hlink);padding:1px 3px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.empty{color:var(--mute);padding:18px 0}
+.hint{color:var(--mute);font-size:14px;margin-top:10px}
+#review{display:none}
+.row{display:flex;gap:10px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line)}
+.row input{width:22px;height:22px;margin-top:3px;flex:none}
+.row:last-child{border-bottom:0}
+h2{font:700 20px/1.3 Georgia,serif;margin:6px 0 4px}
+.note{color:var(--mute);font-size:14px}
+</style>
+</head>
+<body>
+<main>
+<section id="live">
+  <h1>Class Notes</h1>
+  <p class="sub">Put your phone near the speaker, tap Start, and this writes down what it hears.</p>
+  <div class="bar">
+    <button id="go">Start listening</button>
+    <button id="end" class="alt" disabled>End class</button>
+  </div>
+  <div class="status" id="st"><span class="dot"></span><span id="stx">Not listening</span></div>
+  <p class="note" id="dbg" style="margin:0 0 10px">Tap Start, then say a sentence. This line shows what the phone hears.</p>
+  <div class="box" id="box"><div class="empty">Your notes will show up here.</div></div>
+  <p class="hint">Tap any sentence to highlight it as important. Lines with words like exam, assignment, deadline or remember are marked for you.</p>
+</section>
+
+<section id="review">
+  <h1>Save your notes?</h1>
+  <p class="sub">Tick what you want to keep.</p>
+  <div class="bar">
+    <button class="alt" id="selImp">Important only</button>
+    <button class="alt" id="selAll">Select all</button>
+  </div>
+  <div class="box" id="list"></div>
+  <div class="bar" style="margin-top:14px">
+    <button id="copy">Copy notes</button>
+    <button id="dl" class="alt">Download file</button>
+  </div>
+  <div class="bar"><button class="alt" id="back">Back to class</button><button class="alt" id="clear">Discard all</button></div>
+  <p class="note" id="msg"></p>
+</section>
+</main>
+
+<script>
+(function(){
+var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+var KEY=/\b(important|exam|test|quiz|assignment|homework|deadline|due|remember|note that|submit|project|tomorrow|next week|definition|means|formula)\b/i;
+var lines=[],rec=null,running=false,interim='';
+var $=function(i){return document.getElementById(i)};
+var box=$('box'),go=$('go'),end=$('end'),stx=$('stx'),st=$('st');
+
+function save(){try{localStorage.setItem('classnotes',JSON.stringify(lines))}catch(e){}}
+try{var s=localStorage.getItem('classnotes');if(s)lines=JSON.parse(s)||[]}catch(e){}
+
+function esc(t){var d=document.createElement('div');d.textContent=t;return d.innerHTML}
+function time(t){return new Date(t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
+
+function fmt(t){
+  t=t.trim().replace(/\bi\b/g,'I');
+  t=t.charAt(0).toUpperCase()+t.slice(1);
+  var q=/^(what|why|how|where|who|do you|does|did|can you|could you|is it|are you|is there|are there|will you|would you|should)\b/i.test(t);
+  return /[.?!]$/.test(t)?t:t+(q?'?':'.');
+}
+function paras(arr){
+  var out=[],cur=[],last=0;
+  arr.forEach(function(l){
+    if(cur.length&&l.t-last>12000){out.push(cur.join(' '));cur=[]}
+    cur.push(fmt(l.text));last=l.t;
+  });
+  if(cur.length)out.push(cur.join(' '));
+  return out;
+}
+function draw(){
+  var h='',open=false;
+  lines.forEach(function(l,i){
+    if(i>0&&l.t-lines[i-1].t>12000){h+='</p>';open=false}
+    if(!open){h+='<p class="para">';open=true}
+    h+='<span class="seg'+(l.imp?' imp':'')+'" data-i="'+i+'">'+esc(fmt(l.text))+'</span> ';
+  });
+  if(interim){if(!open){h+='<p class="para">';open=true}h+='<span class="live">'+esc(interim)+'</span>'}
+  if(open)h+='</p>';
+  box.innerHTML=h||'<div class="empty">Your notes will show up here.</div>';
+  window.scrollTo(0,document.body.scrollHeight);
+}
+box.addEventListener('click',function(e){
+  var n=e.target.closest('.seg');if(!n)return;
+  var l=lines[+n.getAttribute('data-i')];l.imp=!l.imp;save();draw();
+});
+
+function setStatus(on,t){st.className='status'+(on?' on':'');stx.textContent=t}
+function dbg(t){$('dbg').textContent=t}
+
+function start(){
+  if(!SR){setStatus(false,'This browser cannot transcribe. Open this page in Chrome on Android or Safari on iPhone.');return}
+  rec=new SR();rec.continuous=true;rec.interimResults=true;rec.lang='en-US';
+  rec.onresult=function(ev){
+    interim='';
+    for(var i=ev.resultIndex;i<ev.results.length;i++){
+      var r=ev.results[i],t=r[0].transcript.trim();
+      if(r.isFinal){if(t){var p=lines[lines.length-1],lo=t.toLowerCase(),pl=p?p.text.toLowerCase():'';if(p&&Date.now()-p.t<20000&&(lo.indexOf(pl)===0||pl.indexOf(lo)===0)){if(t.length>=p.text.length)p.text=t;p.imp=p.imp||KEY.test(p.text);p.t=Date.now()}else{lines.push({t:Date.now(),text:t,imp:KEY.test(t)})}}save()}
+      else interim+=t+' ';
+    }
+    draw();
+  };
+  rec.onerror=function(e){
+    var m={'not-allowed':'Microphone is blocked for this page.','service-not-allowed':'Chrome is blocking the speech service.','audio-capture':'No microphone found, or another app (like Telegram) is using it.','network':'Cannot reach the speech service. Check your internet.','no-speech':'No speech heard yet.','aborted':'Stopped.','language-not-supported':'Language not supported.'};
+    dbg('Problem: '+(m[e.error]||e.error));
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){running=false;setStatus(false,'Microphone is blocked. Allow microphone access for this page, then tap Start again.');go.textContent='Start listening'}
+  };
+  rec.onaudiostart=function(){dbg('Mic is on. Waiting for sound…')};
+  rec.onsoundstart=function(){dbg('Hearing sound…')};
+  rec.onspeechstart=function(){dbg('Hearing speech…')};
+  rec.onnomatch=function(){dbg('Heard sound but could not make out words.')};
+  rec.onend=function(){if(running){try{rec.start()}catch(e){}}};
+  try{rec.start();running=true;setStatus(true,'Listening…');go.textContent='Pause';end.disabled=false}catch(e){setStatus(false,'Could not start. Try again.')}
+}
+function pause(){running=false;try{rec.stop()}catch(e){}interim='';draw();setStatus(false,'Paused');go.textContent='Resume'}
+go.onclick=function(){running?pause():start()};
+
+end.onclick=function(){
+  if(running)pause();
+  $('live').style.display='none';$('review').style.display='block';window.scrollTo(0,0);
+  buildList();
+};
+function buildList(){
+  var h='';
+  if(!lines.length){$('list').innerHTML='<div class="empty">Nothing was recorded.</div>';return}
+  lines.forEach(function(l,i){
+    h+='<label class="row"><input type="checkbox" data-i="'+i+'"'+(l.imp?' checked':'')+'><span>'+esc(fmt(l.text))+'</span></label>';
+  });
+  $('list').innerHTML=h;
+}
+function picked(){
+  var out=[];
+  document.querySelectorAll('#list input').forEach(function(c){if(c.checked)out.push(lines[+c.getAttribute('data-i')])});
+  return out;
+}
+function text(){
+  var d=new Date().toLocaleDateString([], {year:'numeric',month:'long',day:'numeric'});
+  return 'Class notes - '+d+'\n\n'+paras(picked()).join('\n\n');
+}
+$('selImp').onclick=function(){document.querySelectorAll('#list input').forEach(function(c){c.checked=!!lines[+c.getAttribute('data-i')].imp})};
+$('selAll').onclick=function(){document.querySelectorAll('#list input').forEach(function(c){c.checked=true})};
+$('copy').onclick=function(){
+  if(!picked().length){$('msg').textContent='Tick at least one line first.';return}
+  var t=text();
+  function ok(){$('msg').textContent='Copied. Paste it into your notes app.'}
+  function fb(){var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');ok()}catch(e){$('msg').textContent='Copy failed. Use Download instead.'}a.remove()}
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(ok,fb)}else fb();
+};
+$('dl').onclick=function(){
+  if(!picked().length){$('msg').textContent='Tick at least one line first.';return}
+  $('msg').textContent='Downloads may be blocked on this page. If nothing happens, use Copy notes.';
+  try{var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text()],{type:'text/plain'}));a.download='class-notes.txt';a.click()}catch(e){}
+};
+$('back').onclick=function(){$('review').style.display='none';$('live').style.display='block';draw()};
+$('clear').onclick=function(){if(confirm('Delete everything from this class?')){lines=[];save();draw();buildList();$('msg').textContent='Cleared.'}};
+
+draw();
+if(!SR)setStatus(false,'Live transcription needs Chrome (Android) or Safari (iPhone).');
+})();
+</script>
+</body>
+</html>
